@@ -52,13 +52,13 @@ module OmniAuth
 
         # Jira's OAuth gives us many potential sites. To request information
         # about the user for the OmniAuth hash, pick the first one that has the
-        # necessary 'read:jira-user' scope.
-        jira_user_scope = 'read:jira-user'
+        # necessary 'read:user:jira' scope.
+        jira_user_scopes = 'read:application-role:jira, read:group:jira, read:user:jira, read:avatar:jira'
         site = sites.find do |candidate_site|
-          candidate_site['scopes'].include?(jira_user_scope)
+          candidate_site['scopes'].intersect?(jira_user_scopes)
         end
         unless site
-          raise "No site found with scope #{jira_user_scope}, please ensure the scope ${jira_user_scope} is added to your OmniAuth config"
+          raise "No site found with scope #{jira_user_scopes}, please ensure the scope ${jira_user_scopes} is added to your OmniAuth config"
         end
 
         cloud_id = site['id']
