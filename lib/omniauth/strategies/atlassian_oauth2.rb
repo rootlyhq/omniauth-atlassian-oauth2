@@ -22,6 +22,8 @@ module OmniAuth
       option :authorize_params,
              prompt: 'consent',
              audience: 'api.atlassian.com'
+     
+      option :new_scopes, false
 
       uid do
         raw_info['myself']['accountId']
@@ -53,7 +55,12 @@ module OmniAuth
         # Jira's OAuth gives us many potential sites. To request information
         # about the user for the OmniAuth hash, pick the first one that has the
         # necessary 'read:user:jira' scope.
-        jira_user_scopes = %w'read:application-role:jira read:group:jira read:user:jira read:avatar:jira'
+        jira_user_scopes = if options.new_scopes
+          %w'read:application-role:jira read:group:jira read:user:jira read:avatar:jira'
+        else
+          %w'read:jira-user'
+        end
+
         site = sites.find do |candidate_site|
           candidate_site['scopes'].intersect?(jira_user_scopes)
         end
