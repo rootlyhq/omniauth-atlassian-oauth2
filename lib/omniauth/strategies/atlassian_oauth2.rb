@@ -61,18 +61,31 @@ module OmniAuth
           %w'read:jira-user'
         end
 
-        site = sites.find do |candidate_site|
+        sites = sites.filter do |candidate_site|
           candidate_site['scopes'].intersect?(jira_user_scopes)
         end
-        unless site
-          raise "No site found with scope #{jira_user_scopes}, please ensure the scope ${jira_user_scopes} is added to your OmniAuth config"
+
+        if sites.empty?
+          raise "No sites found with scope #{jira_user_scopes}, please ensure the scope ${jira_user_scopes} is added to your OmniAuth config"
         end
 
-        cloud_id = site['id']
-        base_url = "https://api.atlassian.com/ex/jira/#{cloud_id}"
-        myself_url = "#{base_url}/rest/api/3/myself"
+        site = nil
+        myself = nil
 
-        myself = JSON.parse(access_token.get(myself_url).body)
+        sites.each do |candidate_site|
+          begin
+            base_url = "https://api.atlassian.com/ex/jira/#{candidate_site["id"]}"
+            myself_url = "#{base_url}/rest/api/3/myself"
+            myself = JSON.parse(access_token.get(myself_url).body)
+            site = candidate_site
+            break
+          rescue ::OAuth2::Error
+            next
+          end
+        end
+
+        raise StandardError, 'Cannot find valid site' unless site
+        raise StandardError, 'Cannot fetch current user' unless myself
 
         @raw_info ||= {
           'site' => site,
