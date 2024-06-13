@@ -22,6 +22,8 @@ module OmniAuth
       option :authorize_params,
              prompt: 'consent',
              audience: 'api.atlassian.com'
+     
+      option :new_scopes, false
 
       uid do
         raw_info['myself']['accountId']
@@ -52,20 +54,38 @@ module OmniAuth
 
         # Jira's OAuth gives us many potential sites. To request information
         # about the user for the OmniAuth hash, pick the first one that has the
-        # necessary 'read:jira-user' scope.
-        jira_user_scope = 'read:jira-user'
-        site = sites.find do |candidate_site|
-          candidate_site['scopes'].include?(jira_user_scope)
-        end
-        unless site
-          raise "No site found with scope #{jira_user_scope}, please ensure the scope ${jira_user_scope} is added to your OmniAuth config"
+        # necessary 'read:user:jira' scope.
+        jira_user_scopes = if options.new_scopes
+          %w'read:application-role:jira read:group:jira read:user:jira read:avatar:jira'
+        else
+          %w'read:jira-user'
         end
 
-        cloud_id = site['id']
-        base_url = "https://api.atlassian.com/ex/jira/#{cloud_id}"
-        myself_url = "#{base_url}/rest/api/3/myself"
+        sites = sites.filter do |candidate_site|
+          candidate_site['scopes'].intersect?(jira_user_scopes)
+        end
 
-        myself = JSON.parse(access_token.get(myself_url).body)
+        if sites.empty?
+          raise "No sites found with scope #{jira_user_scopes}, please ensure the scope ${jira_user_scopes} is added to your OmniAuth config"
+        end
+
+        site = nil
+        myself = nil
+
+        sites.each do |candidate_site|
+          begin
+            base_url = "https://api.atlassian.com/ex/jira/#{candidate_site["id"]}"
+            myself_url = "#{base_url}/rest/api/3/myself"
+            myself = JSON.parse(access_token.get(myself_url).body)
+            site = candidate_site
+            break
+          rescue ::OAuth2::Error
+            next
+          end
+        end
+
+        raise StandardError, 'Cannot find valid site' unless site
+        raise StandardError, 'Cannot fetch current user' unless myself
 
         @raw_info ||= {
           'site' => site,
